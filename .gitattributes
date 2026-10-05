@@ -1,0 +1,10 @@
+# Keep launcher line endings correct on every OS
+*.bat      text eol=crlf
+*.command  text eol=lf
+*.py       text eol=lf
+# Binary files
+*.xz       binary
+*.pptx     binary
+*.docx     binary
+*.pdf      binary
+*.png      binary

@@ -1,0 +1,11 @@
+# Python / launcher-created files
+.venv/
+venv/
+__pycache__/
+*.pyc
+cache/
+
+# Office lock files and OS junk
+~$*
+.DS_Store
+Thumbs.db

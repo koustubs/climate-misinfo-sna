@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Climate Misinformation · Network Analysis</title>
+<link rel="stylesheet" href="style.css">
+<script src="vendor/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="appbar" id="appbar">
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 32 32" width="30" height="30"><g fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="9" r="3.2"/><circle cx="8" cy="23" r="3.2"/><circle cx="24" cy="16" r="3.8"/><path d="M11 10.5 20.5 14.5M11 21.5l9.5-4"/></g><circle cx="24" cy="16" r="1.6" fill="currentColor"/></svg>
+    </div>
+    <div>
+      <div class="brand-title">Climate Misinformation · Network Analysis</div>
+      <div class="brand-sub">Detection &amp; network analysis on COP26 / COP27 retweet networks</div>
+    </div>
+  </div>
+  <div class="top-right">
+    <div class="seg" id="netSwitch" role="tablist" aria-label="Conference network">
+      <button data-net="cop26" class="active">COP26</button>
+      <button data-net="cop27">COP27</button>
+    </div>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-tab="overview" class="active"><span class="num">01</span>Overview</button>
+  <button data-tab="network"><span class="num">02</span>Network &amp; communities</button>
+  <button data-tab="detection"><span class="num">03</span>Spreader detection</button>
+  <button data-tab="simulation"><span class="num">04</span>Fact-check experiment</button>
+  <button data-tab="playground"><span class="num">05</span>Cascade playground</button>
+  <button data-tab="methods"><span class="num">06</span>Methods</button>
+</nav>
+</div>
+
+<main>
+<!-- =============================================================== PIPELINE (loading) -->
+<section id="loading" class="panel-loading">
+  <div class="card loading-card">
+    <div class="eyebrow">Analysis pipeline</div>
+    <h1>Preparing the networks</h1>
+    <p class="lead" id="loadingLead">The first launch processes all 674,485 records. This takes about a minute; later launches start instantly from the cache.</p>
+    <div class="progress"><div class="bar" id="loadBar"></div></div>
+    <div class="load-msg" id="loadMsg">Starting…</div>
+    <ol class="stepper" id="stepperLoading"></ol>
+    <div class="error-box hidden" id="errorBox"></div>
+  </div>
+</section>
+
+<!-- =============================================================== OVERVIEW -->
+<section id="tab-overview" class="tab hidden">
+  <div class="section-head">
+    <div>
+      <div class="eyebrow">Overview</div>
+      <h2 id="ovTitle">COP26 retweet network</h2>
+      <p class="muted">Every number on this page is computed live from the original Zenodo release by the pipeline below.</p>
+    </div>
+    <div class="integrity" id="integrity"></div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-head"><h3>Flagged posts vs. cross-community sharing</h3><span class="hint">COP26 vs COP27</span></div>
+      <div class="chart-row">
+        <div class="chart-box sm"><canvas id="chFlag"></canvas></div>
+        <div class="chart-box sm"><canvas id="chCross"></canvas></div>
+      </div>
+      <p class="note">Left: share of posts the dataset's classifier flags as misinformation. Right: share of matched retweets that cross between the dataset's Infomap communities. Different denominators, so no causal link is implied.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>Key findings</h3><span class="hint" id="findingsNet"></span></div>
+      <ul class="findings" id="findings"></ul>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h3>Pipeline</h3>
+      <div class="row gap">
+        <span class="hint" id="pipeTotal"></span>
+        <button class="btn ghost" id="btnRerun" title="Recompute everything from the raw CSV">Re-run from raw data</button>
+      </div>
+    </div>
+    <ol class="stepper horizontal" id="stepperDone"></ol>
+  </div>
+</section>
+
+<!-- =============================================================== NETWORK -->
+<section id="tab-network" class="tab hidden">
+  <div class="section-head">
+    <div>
+      <div class="eyebrow">Graph representation · community detection · centrality</div>
+      <h2>Who retweets whom</h2>
+      <p class="muted" id="netLead"></p>
+    </div>
+  </div>
+  <div class="grid-net">
+    <div class="card graph-card">
+      <div class="toolbar">
+        <label>Colour
+          <select id="colorBy">
+            <option value="louvain">Louvain community (ours)</option>
+            <option value="infomap">Infomap community (dataset)</option>
+            <option value="flag">Share of flagged posts</option>
+            <option value="pred">Detector: spreader probability</option>
+          </select>
+        </label>
+        <label>Size
+          <select id="sizeBy">
+            <option value="outdeg">Out-degree (retweeters)</option>
+            <option value="btw">Betweenness</option>
+            <option value="pr">PageRank</option>
+          </select>
+        </label>
+        <label>Highlight
+          <select id="highlightBy">
+            <option value="none">Nothing</option>
+            <option value="outdeg">Top 3% by degree</option>
+            <option value="btw">Top 3% by betweenness</option>
+            <option value="pr">Top 3% by PageRank</option>
+          </select>
+        </label>
+        <label class="check"><input type="checkbox" id="showEdges" checked> Edges</label>
+        <button class="btn ghost sm" id="btnResetView">Reset view</button>
+      </div>
+      <div class="canvas-wrap" id="graphWrap">
+        <canvas id="graphCanvas"></canvas>
+        <div class="tooltip hidden" id="tooltip"></div>
+        <div class="legend" id="graphLegend"></div>
+      </div>
+      <p class="note">Showing the most connected accounts of the 8 largest Louvain communities (<span id="sampleInfo"></span>). Scroll to zoom, drag to pan, hover for details.</p>
+    </div>
+    <div class="stack">
+      <div class="card">
+        <div class="card-head"><h3>Communities</h3></div>
+        <div class="mini-kpis" id="commKpis"></div>
+        <p class="note">NMI / ARI measure how closely our Louvain partition agrees with the Infomap communities supplied with the dataset (1 = identical).</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Retweet flows between communities</h3>
+          <div class="seg sm" id="flowSwitch"><button data-flow="infomap" class="active">Infomap</button><button data-flow="louvain">Louvain</button></div>
+        </div>
+        <div id="flowMatrix" class="flow"></div>
+        <p class="note">Row = original author's community, column = retweeter's. Diagonal (within-community) hidden so the between-group flows stand out.</p>
+      </div>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-head"><h3>Largest Louvain communities</h3></div>
+      <div class="table-wrap"><table class="tbl" id="commTable"></table></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>Most central accounts</h3>
+        <div class="seg sm" id="topSwitch"><button data-top="degree" class="active">Degree</button><button data-top="bridge">Betweenness</button><button data-top="pagerank">PageRank</button></div>
+      </div>
+      <div class="table-wrap"><table class="tbl" id="topTable"></table></div>
+      <p class="note">Account IDs are the dataset's anonymised hashes.</p>
+    </div>
+  </div>
+</section>
+
+<!-- =============================================================== DETECTION -->
+<section id="tab-detection" class="tab hidden">
+  <div class="section-head">
+    <div>
+      <div class="eyebrow">Machine learning on network features</div>
+      <h2>Can we spot misinformation spreaders from network behaviour alone?</h2>
+      <p class="muted">Labels come from the dataset's text classifier. The model never sees an account's own posts or scores - only how it behaves and where it sits in the retweet network.</p>
+    </div>
+  </div>
+  <div class="grid-controls">
+    <div class="card controls">
+      <h3>Model settings</h3>
+      <label class="field">Model
+        <select id="detModel"></select>
+      </label>
+      <label class="field"><span>Spreader if ≥ <b id="detShareVal">20</b>% of its posts are flagged</span>
+        <input type="range" id="detShare" min="10" max="50" step="5" value="20">
+      </label>
+      <label class="field"><span>Only accounts with ≥ <b id="detMinVal">3</b> posts</span>
+        <input type="range" id="detMin" min="1" max="10" step="1" value="3">
+      </label>
+      <div class="field">Feature groups
+        <label class="check"><input type="checkbox" class="detGroup" value="behaviour" checked><i class="sw" style="background:#A39BA6;border-radius:3px"></i>Behaviour <span class="hint">posting habits</span></label>
+        <label class="check"><input type="checkbox" class="detGroup" value="structure" checked><i class="sw" style="background:#7A4966;border-radius:3px"></i>Structure <span class="hint">centrality</span></label>
+        <label class="check"><input type="checkbox" class="detGroup" value="homophily" checked><i class="sw" style="background:#B77D22;border-radius:3px"></i>Homophily <span class="hint">neighbours</span></label>
+      </div>
+      <button class="btn primary block" id="btnTrain">Train &amp; evaluate</button>
+      <p class="note" id="detCounts"></p>
+    </div>
+    <div class="stack">
+      <div class="kpis six" id="detKpis"></div>
+      <div class="grid-2 tight">
+        <div class="card">
+          <div class="card-head"><h3>ROC curve</h3><span class="hint">held-out 30% test set</span></div>
+          <div class="chart-box"><canvas id="chRoc"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Confusion matrix</h3><span class="hint">threshold 0.5</span></div>
+          <div id="confusion" class="confusion"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-head"><h3>Does network information help?</h3><span class="hint">same model, cumulative feature groups</span></div>
+      <div class="chart-box"><canvas id="chCompare"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>What the model relies on</h3><span class="hint">permutation importance: drop in ROC-AUC when a feature is shuffled</span></div>
+      <div class="chart-box tall"><canvas id="chImportance"></canvas></div>
+      <div class="legend inline" style="margin-top:8px"><span><i class="dotc" style="background:#A39BA6"></i>Behaviour</span><span><i class="dotc" style="background:#7A4966"></i>Structure</span><span><i class="dotc" style="background:#B77D22"></i>Homophily</span></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h3>Highest-scoring accounts in the test set</h3><span class="hint">the model never saw these labels</span></div>
+    <div class="table-wrap"><table class="tbl" id="suspectTable"></table></div>
+  </div>
+</section>
+
+<!-- =============================================================== SIMULATION -->
+<section id="tab-simulation" class="tab hidden">
+  <div class="section-head">
+    <div>
+      <div class="eyebrow">Independent Cascade model · paired trials</div>
+      <h2>Where should a limited number of fact checks go?</h2>
+      <p class="muted">A claim starts from accounts that posted flagged content and spreads along retweet links with probability <i>p</i>. Fact-checked accounts can still see it but never pass it on. All strategies face identical seeds and identical live links in every trial.</p>
+    </div>
+  </div>
+  <div class="grid-controls">
+    <div class="card controls">
+      <h3>Experiment settings</h3>
+      <label class="field"><span>Spread probability <i>p</i> = <b id="simPVal">10</b>%</span>
+        <input type="range" id="simP" min="1" max="40" step="1" value="10">
+      </label>
+      <label class="field"><span>Fact-check budget = <b id="simBVal">1</b>% of accounts <span class="hint" id="simBudgetN"></span></span>
+        <input type="range" id="simB" min="0.5" max="10" step="0.5" value="1">
+      </label>
+      <div class="field-row">
+        <label class="field">Seeds <input type="number" id="simSeeds" min="1" max="100" value="10"></label>
+        <label class="field">Trials <input type="number" id="simTrials" min="10" max="2000" step="10" value="200"></label>
+        <label class="field">Random seed <input type="number" id="simSeed" min="0" max="9999" value="0"></label>
+      </div>
+      <div class="field">Strategies
+        <div id="stratChecks" class="strat-checks"></div>
+      </div>
+      <button class="btn primary block" id="btnSim">Run experiment</button>
+      <div class="row gap">
+        <button class="btn ghost sm grow" id="btnSweep">Sweep over p</button>
+        <button class="btn ghost sm grow" id="btnSlides">Slide settings</button>
+      </div>
+      <p class="note">Random seed 0 with the slide settings reproduces the presentation exactly.</p>
+    </div>
+    <div class="stack">
+      <div class="card">
+        <div class="card-head"><h3 id="simTitle">Reduction in average reach</h3><span class="hint" id="simMeta"></span></div>
+        <div class="chart-box"><canvas id="chSim"></canvas></div>
+        <div class="callout" id="simCallout"></div>
+      </div>
+      <div class="card">
+        <div class="table-wrap"><table class="tbl" id="simTable"></table></div>
+      </div>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-head"><h3>Sensitivity to spread probability</h3><span class="hint" id="sweepMeta">press "Sweep over p"</span></div>
+      <div class="chart-box"><canvas id="chSweep"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>Reproducing the presentation</h3><span class="hint">1% budget · 10 seeds · 200 trials · seed 0</span></div>
+      <div class="table-wrap"><table class="tbl" id="reproTable"></table></div>
+      <p class="note" id="reproNote"></p>
+    </div>
+  </div>
+</section>
+
+<!-- =============================================================== PLAYGROUND -->
+<section id="tab-playground" class="tab hidden">
+  <div class="section-head">
+    <div>
+      <div class="eyebrow">Watch one cascade</div>
+      <h2>Same claim, same links - with and without fact checks</h2>
+      <p class="muted">Both panels use identical seed accounts and identical live links. On the right, the selected strategy fact-checks a few accounts; watch how far the claim gets.</p>
+    </div>
+  </div>
+  <div class="card">
+    <div class="toolbar wrap">
+      <label>Strategy
+        <select id="pgStrategy"></select>
+      </label>
+      <label><span>Spread <i>p</i> = <b id="pgPVal">30</b>%</span>
+        <input type="range" id="pgP" min="5" max="60" step="5" value="30">
+      </label>
+      <label><span>Budget = <b id="pgBVal">5</b>% of accounts</span>
+        <input type="range" id="pgB" min="1" max="15" step="1" value="5">
+      </label>
+      <label>Seeds
+        <input type="number" id="pgSeeds" min="1" max="10" value="3">
+      </label>
+      <div class="row gap">
+        <button class="btn ghost" id="pgNew">New claim</button>
+        <button class="btn primary" id="pgPlay">▶ Play</button>
+        <button class="btn ghost" id="pgStep">Step</button>
+        <button class="btn ghost" id="pgReset">Reset</button>
+      </div>
+    </div>
+    <div class="pg-grid">
+      <div class="pg-panel">
+        <div class="pg-head"><span class="pg-title">No fact checks</span><span class="pg-count" id="pgCountA">-</span></div>
+        <div class="canvas-wrap pg"><canvas id="pgCanvasA"></canvas></div>
+      </div>
+      <div class="pg-panel">
+        <div class="pg-head"><span class="pg-title" id="pgTitleB">With fact checks</span><span class="pg-count" id="pgCountB">-</span></div>
+        <div class="canvas-wrap pg"><canvas id="pgCanvasB"></canvas></div>
+      </div>
+    </div>
+    <div class="pg-foot">
+      <div class="legend inline">
+        <span><i class="sw seed"></i>Seed account</span>
+        <span><i class="sw reached"></i>Reached</span>
+        <span><i class="sw blocked"></i>Fact-checked (stops sharing)</span>
+        <span><i class="sw idle"></i>Not reached</span>
+      </div>
+      <div class="pg-summary" id="pgSummary"></div>
+    </div>
+  </div>
+</section>
+
+<!-- =============================================================== METHODS -->
+<section id="tab-methods" class="tab hidden">
+  <div class="section-head">
+    <div>
+      <div class="eyebrow">How it works</div>
+      <h2>Methods, data and limitations</h2>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="card prose">
+      <h3>Data</h3>
+      <p>DIGSUM <i>cop26-27-tweets</i> network subset (Zenodo, March 2026): 674,485 anonymised tweet records from the COP26 (2021) and COP27 (2022) climate summits, with retweet/quote/reply targets, Infomap community IDs and a misinformation probability per post from the authors' classifier (flag = probability ≥ 0.5). No tweet text is included.</p>
+      <p id="srcLinks"></p>
+      <h3>1 · Graph construction</h3>
+      <p>Directed graph per conference. Edge <b>author → retweeter</b> when the retweeted author also posted in the same subset. Repeated retweets collapse to one edge; self-retweets are removed.</p>
+      <h3>2 · Communities</h3>
+      <p><b>Louvain</b> maximises modularity <span class="math">Q = (1/2m) Σ<sub>ij</sub> [A<sub>ij</sub> − k<sub>i</sub>k<sub>j</sub>/2m] δ(c<sub>i</sub>, c<sub>j</sub>)</span> on the undirected, retweet-weighted graph. We compare it with the dataset's Infomap partition using NMI and ARI.</p>
+      <h3>3 · Centrality</h3>
+      <p><b>Degree</b>: number of distinct retweeters. <b>Betweenness</b> <span class="math">C<sub>B</sub>(v) = Σ σ<sub>st</sub>(v)/σ<sub>st</sub></span>, estimated with Brandes' algorithm from 128 sampled sources. <b>PageRank</b> on the reversed graph (retweeter → author), damping 0.85. <b>k-core</b> number on the undirected graph.</p>
+    </div>
+    <div class="card prose">
+      <h3>4 · Spreader detection</h3>
+      <p>Account label: spreader if ≥ 20% of its posts are flagged (accounts with ≥ 3 posts). 16 features in three groups - behaviour, network structure and homophily (share of neighbours who are known spreaders, computed out-of-fold from training labels only). Stratified 70/30 split; metrics on the held-out 30%.</p>
+      <h3>5 · Fact-check experiment</h3>
+      <p>Independent Cascade in live-edge form: each edge is live with probability <i>p</i>; the claim reaches everything reachable from the seeds. Fact-checked accounts receive but never forward. Reduction = 1 − mean reach / mean baseline reach. 95% intervals from 2,000 paired bootstrap resamples.</p>
+      <h3>Limitations</h3>
+      <ul>
+        <li>About 21% of retweets point to accounts outside the released subset, so the graphs are partial.</li>
+        <li>Labels are the dataset classifier's outputs; without tweet text they cannot be audited here.</li>
+        <li>Perfect stopping after a fact check is an idealised assumption - real corrections are weaker.</li>
+        <li>Posts are from 2021-22; the dataset was released in 2026.</li>
+      </ul>
+      <h3>Code map</h3>
+      <table class="tbl compact">
+        <tr><td><code>sna/ingest.py</code></td><td>Stream + verify the raw CSV</td></tr>
+        <tr><td><code>sna/graph.py</code></td><td>Retweet networks and statistics</td></tr>
+        <tr><td><code>sna/communities.py</code></td><td>Louvain, NMI/ARI, flow matrices</td></tr>
+        <tr><td><code>sna/centrality.py</code></td><td>Brandes betweenness, PageRank</td></tr>
+        <tr><td><code>sna/detection.py</code></td><td>Features, models, evaluation</td></tr>
+        <tr><td><code>sna/simulation.py</code></td><td>Independent Cascade engine</td></tr>
+        <tr><td><code>sna/pipeline.py</code></td><td>Orchestration and caching</td></tr>
+        <tr><td><code>app.py</code></td><td>Flask API + web server</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+</main>
+
+<div class="toast hidden" id="toast"></div>
+<script src="app.js"></script>
+</body>
+</html>
